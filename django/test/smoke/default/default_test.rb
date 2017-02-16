@@ -5,7 +5,6 @@
 # The Inspec reference, with examples and extensive documentation, can be
 # found at http://inspec.io/docs/reference/resources/
 
-describe 'django::default' do
   describe command('django -admin --version') do
-    its (:stdout) { should match (/1.6.1/)} end
-end
+    its (:stdout) { should match (/1.6./)}
+ end
