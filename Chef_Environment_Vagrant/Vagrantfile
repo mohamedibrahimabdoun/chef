@@ -1,0 +1,149 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure(2) do |config|
+
+  config.vm.box = "centos/7"
+
+  config.vm.define "chefserver" do |kube|
+    kube.vm.hostname = "chefserver.myk8sdomain.com"
+    kube.vm.network "private_network", ip: "10.10.10.40"
+    config.vm.provider :virtualbox do |vb|
+       vb.customize ["modifyvm", :id, "--memory", "4048"]
+       vb.customize ["modifyvm", :id, "--cpus", "2"]
+    end  
+    kube.vm.provision "shell", inline: $server_script
+  end
+  
+   config.vm.define "workstation" do |kube|
+    kube.vm.hostname = "workstation.myk8sdomain.com"
+    kube.vm.network "private_network", ip: "10.10.10.41"
+    config.vm.provider :virtualbox do |vb|
+       vb.customize ["modifyvm", :id, "--memory", "1548"]
+       vb.customize ["modifyvm", :id, "--cpus", "1"]
+    end
+    kube.vm.provision "shell", inline: $workstation_script
+  end
+ 
+ config.vm.define "node01" do |kube|
+    kube.vm.hostname = "node01.myk8sdomain.com"
+    kube.vm.network "private_network", ip: "10.10.10.42"
+    config.vm.provider :virtualbox do |vb|
+       vb.customize ["modifyvm", :id, "--memory", "1024"]
+       vb.customize ["modifyvm", :id, "--cpus", "1"]
+    end
+    kube.vm.provision "shell", inline: $nodes_script
+  end
+
+ config.vm.define "node02" do |kube|
+    kube.vm.hostname = "node02.myk8sdomain.com"
+    kube.vm.network "private_network", ip: "10.10.10.43"
+    config.vm.provider :virtualbox do |vb|
+       vb.customize ["modifyvm", :id, "--memory", "1024"]
+       vb.customize ["modifyvm", :id, "--cpus", "1"]
+    end
+    kube.vm.provision "shell", inline: $nodes_script
+  end
+  
+   config.vm.define "node03" do |kube|
+    kube.vm.hostname = "node03.myk8sdomain.com"
+    kube.vm.network "private_network", ip: "10.10.10.44"
+    config.vm.provider :virtualbox do |vb|
+       vb.customize ["modifyvm", :id, "--memory", "1024"]
+       vb.customize ["modifyvm", :id, "--cpus", "1"]
+    end
+    kube.vm.provision "shell", inline: $nodes_script
+  end
+  
+
+
+$server_script = <<SCRIPT
+echo I am provisioning...
+sudo su
+echo "r00tme" | sudo passwd --stdin  root
+
+cp /vagrant/hosts /etc/hosts
+cp /vagrant/install_chef_server.sh /tmp/install_chef_server.sh
+chmod u+x /tmp/install-chef-server.sh
+#apt-get update
+#apt-get -y install curl wget
+yum install wget curl -y
+sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config
+sed -i 's/#PermitRootLogin yes/PermitRootLogin yes/g' /etc/ssh/sshd_config
+systemctl restart sshd.service
+
+wget -nv -P /root  https://packages.chef.io/files/stable/chef-server/12.19.31/el/7/chef-server-core-12.19.31-1.el7.x86_64.rpm
+# install Chef server
+if [ ! $(which chef-server-ctl) ]; then
+  echo "Installing Chef server..."
+  rpm -ivh /root/chef-server-core-12.19.31-1.el7.x86_64.rpm
+  chef-server-ctl reconfigure
+
+  #echo "Waiting for services..."
+  #until (curl -D - http://localhost:8000/_status) | grep "200 OK"; do sleep 15s; done
+  #while (curl http://localhost:8000/_status) | grep "fail"; do sleep 15s; done
+
+  echo "Creating initial user and organization..."
+  chef-server-ctl user-create chefadmin Chef Admin admin@4thcoffee.com chefpass --filename /root/chefadmin.pem
+  chef-server-ctl org-create 4thcoffee "Fourth Coffee, Inc." --association_user chefadmin --filename 4thcoffee-validator.pem
+fi
+
+chef-server-ctl install chef-manage 
+chef-server-ctl reconfigure
+#execute below step manually 
+# chef-manage-ctl reconfigure 
+
+
+echo "Your Chef server is ready!"
+#sudo sh /tmp/install-chef-server.sh
+#sudo apt-get update 
+
+
+SCRIPT
+
+
+$nodes_script = <<SCRIPT
+echo I am provisioning...
+sudo su
+echo "r00tme" | sudo passwd --stdin  root
+
+sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config
+sed -i 's/#PermitRootLogin yes/PermitRootLogin yes/g' /etc/ssh/sshd_config
+systemctl restart sshd.service
+
+useradd chef
+echo "chef" | sudo passwd --stdin  chef
+echo "chef        ALL=(ALL)       NOPASSWD: ALL " >> /etc/sudoers
+
+
+
+cp /vagrant/hosts /etc/hosts
+#sudo apt-get update 
+
+
+
+SCRIPT
+
+
+$workstation_script = <<SCRIPT
+echo I am provisioning...
+sudo su
+echo "r00tme" | sudo passwd --stdin  root
+useradd chef
+echo "chef" | sudo passwd --stdin  chef
+echo "chef        ALL=(ALL)       NOPASSWD: ALL " >> /etc/sudoers
+
+sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config
+sed -i 's/#PermitRootLogin yes/PermitRootLogin yes/g' /etc/ssh/sshd_config
+systemctl restart sshd.service
+
+rpm -ivh https://packages.chef.io/files/stable/chefdk/3.8.14/el/7/chefdk-3.8.14-1.el7.x86_64.rpm
+
+cp /vagrant/hosts /etc/hosts
+#sudo apt-get update 
+
+
+
+SCRIPT
+
+end
